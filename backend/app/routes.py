@@ -4,7 +4,7 @@ from flask import Blueprint, jsonify
 main = Blueprint("main", __name__)
 
 # Test route
-@main.route("/", methods=["GET"]) # should be "/api/health" , changed it for testing
+@main.route("/api/health", methods=["GET"]) # should be "/api/health" , changed it for testing
 def health_check():
 
     return jsonify({

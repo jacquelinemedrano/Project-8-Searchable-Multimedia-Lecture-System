@@ -14,7 +14,14 @@ def create_app():
 
     # Connect database to Flask
     db.init_app(app)
+        # Import models so SQLAlchemy knows which tables to create
+    from . import models
 
+    # Create database tables
+    with app.app_context():
+        db.create_all()
+    
+    
     # Import and register routes
     from .routes import main
     app.register_blueprint(main)
