@@ -8,7 +8,7 @@ def create_app():
     app = Flask(__name__)
     
     backend_folder = os.path.abspath(  #get backend folder pathway
-        os.path.join(app.root_path)
+        os.path.join(app.root_path,"..")
     )
     
     #setup the upload folder
@@ -19,6 +19,7 @@ def create_app():
     
     #double check if the upload folder exsits
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+    print("UPLOAD FOLDER:", app.config["UPLOAD_FOLDER"])
     
     # Configure SQLite database
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///lectures.db"
