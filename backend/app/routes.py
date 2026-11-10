@@ -1,4 +1,11 @@
+import os
+import uuid
+
 from flask import Blueprint, jsonify
+from werkzeug.utils import secure_filename
+
+from .database import db
+from .models import Lecture
 
 # Create a blueprint for our routes
 main = Blueprint("main", __name__)
