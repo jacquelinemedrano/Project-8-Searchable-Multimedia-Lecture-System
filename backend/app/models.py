@@ -1,5 +1,5 @@
 from .database import db
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 # Stores uploaded lecture information
@@ -11,7 +11,14 @@ class Lecture(db.Model):
     title = db.Column(db.String(200), nullable=False)
     video_path = db.Column(db.String(500))
     slides_pdf_path = db.Column(db.String(500))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    
+    def __init__(self, title, video_path=None, slides_pdf_path=None):
+
+        self.title = title
+        self.video_path = video_path
+        self.slides_pdf_path = slides_pdf_path
+        self.created_at = datetime.now(timezone.utc)
 
 
 # Stores transcript text and timestamps

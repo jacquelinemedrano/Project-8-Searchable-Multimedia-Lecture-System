@@ -8,7 +8,7 @@ def create_app():
     app = Flask(__name__)
     
     backend_folder = os.path.abspath(  #get backend folder pathway
-        os.path.join(app.root_path, "..", "backend")
+        os.path.join(app.root_path)
     )
     
     #setup the upload folder
