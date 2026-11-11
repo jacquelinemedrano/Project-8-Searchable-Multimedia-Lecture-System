@@ -169,3 +169,25 @@ def get_lecture(lecture_id):
         "created_at": lecture.created_at.isoformat() if lecture.created_at else None
     }), 200
     
+    
+    
+@main.route("/api/lectures/<int:lecture_id>/video", methods=["GET"])
+def get_lecture_video(lecture_id):
+    lecture = db.session.get(Lecture, lecture_id)
+        
+        # Query the database for the lecture with the given ID
+        # If the lecture does not exist, return a 404 error response
+    if lecture is None:
+        return jsonify({
+            "error": "Lecture not found."
+         }), 404
+
+        # If the lecture does not have a video or the video file does not exist, return a 404 error response
+    if not lecture.video_path or not os.path.exists(lecture.video_path):
+        return jsonify({
+            "error": "Video not found."
+        }), 404
+
+    # Send the video file as a response to the frontend
+    return send_file(lecture.video_path)
+    
