@@ -17,6 +17,8 @@ def health_check():
     return jsonify({
         "message": "Lecture System Backend is Running!"
     })
+
+
     
 #upload lecture videos and slides
 @main.route("/api/lectures/uploads", methods=["POST"])
@@ -123,3 +125,23 @@ def upload_lecture():
         "lecture_id": new_lecture.lecture_id,
         "title": new_lecture.title
     }), 201    
+    
+    
+#get all lectures from the database
+@main.route("/api/lectures", methods=["GET"])
+def get_lectures():
+   lectures = Lecture.query.all()
+   
+   #create list for storing lecture information in dictionary format
+   lecture_list = [] 
+   for lecture in lectures:
+       lecture_list.append({
+           "lecture_id": lecture.lecture_id,
+           "title": lecture.title,
+           "video_path": lecture.video_path, #might not need this
+           "slides_pdf_path": lecture.slides_pdf_path,
+           "created_at": lecture.created_at.isoformat()
+           if lecture.created_at else None
+       })
+       #return lectures as JSON response
+   return jsonify(lecture_list), 200
