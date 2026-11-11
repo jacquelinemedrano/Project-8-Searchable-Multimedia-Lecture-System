@@ -1,7 +1,7 @@
 import os
 import uuid
 
-from flask import Blueprint, jsonify, request, current_app
+from flask import Blueprint, jsonify, request, current_app, send_file
 from werkzeug.utils import secure_filename
 
 from .database import db
@@ -127,6 +127,7 @@ def upload_lecture():
     }), 201    
     
     
+    
 #get all lectures from the database
 @main.route("/api/lectures", methods=["GET"])
 def get_lectures():
@@ -145,3 +146,26 @@ def get_lectures():
        })
        #return lectures as JSON response
    return jsonify(lecture_list), 200
+
+
+
+#get a single lecture by its ID from the database
+@main.route("/api/lectures/<int:lecture_id>", methods=["GET"])
+def get_lecture(lecture_id):
+    
+    # Query the database for the lecture with the given ID
+    lecture = Lecture.query.get(lecture_id)
+    if not lecture:
+        return jsonify({
+            "error": "Lecture not found."
+        }), 404
+
+    # Return the lecture information as a JSON response
+    return jsonify({ 
+        "lecture_id": lecture.lecture_id,
+        "title": lecture.title,
+        "video_path": lecture.video_path,
+        "slides_pdf_path": lecture.slides_pdf_path,
+        "created_at": lecture.created_at.isoformat() if lecture.created_at else None
+    }), 200
+    
