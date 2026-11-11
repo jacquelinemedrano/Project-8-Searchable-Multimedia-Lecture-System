@@ -1,0 +1,23 @@
+
+# Uploaded files
+backend/uploads/
+
+# SQLite databases
+backend/instance/
+backend/*.db
+backend/*.sqlite
+backend/*.sqlite3
+
+# Python virtual environment
+backend/venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Environment variables
+.env
+
+# Postman local files
+.postman/
+postman/
