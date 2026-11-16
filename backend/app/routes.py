@@ -190,4 +190,35 @@ def get_lecture_video(lecture_id):
 
     # Send the video file as a response to the frontend
     return send_file(lecture.video_path)
+
+    # Delete a lecture entry by its ID from the database and remove local files
+@main.route("/api/lectures/<int:lecture_id>", methods=["DELETE"])
+def delete_lecture(lecture_id):
+    lecture = Lecture.query.get(lecture_id)
+    if not lecture:
+        return jsonify({
+            "error": "Lecture not found."
+        }), 404
+
+    try:
+        # Remove local video file if it exists
+        if lecture.video_path and os.path.exists(lecture.video_path):
+            os.remove(lecture.video_path)
+
+        # Remove local slides file if it exists
+        if lecture.slides_pdf_path and os.path.exists(lecture.slides_pdf_path):
+            os.remove(lecture.slides_pdf_path)
+
+        db.session.delete(lecture)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({
+            "error": "Could not delete the lecture."
+        }), 500
+
+    return jsonify({
+        "message": "Lecture deleted successfully!",
+        "lecture_id": lecture_id
+    }), 200
     
