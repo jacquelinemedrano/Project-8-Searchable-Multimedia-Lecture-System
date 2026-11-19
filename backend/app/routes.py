@@ -5,7 +5,8 @@ from flask import Blueprint, jsonify, request, current_app, send_file
 from werkzeug.utils import secure_filename
 
 from .database import db
-from .models import Lecture
+from .models import Lecture, Scene
+from .scene_detection import detect_video_scenes, save_scenes_to_database
 
 # Create a blueprint for our routes
 main = Blueprint("main", __name__)
@@ -118,12 +119,30 @@ def upload_lecture():
         return jsonify({
             "error": "Could not save the lecture."
         }), 500
+        
+    # Detect and save scenes from the uploaded video
+    try:
+
+        # Detect scenes in the uploaded video
+        scenes = detect_video_scenes(video_path)
+
+        # Save detected scenes using the new lecture ID
+        save_scenes_to_database(new_lecture.lecture_id, scenes)
+
+        scene_detection_status = "completed"
+
+    except Exception as e:
+
+        # Log the error without failing the lecture upload
+        current_app.logger.exception("Scene detection failed")
+        scene_detection_status = "failed"
 
     # Send a response back to the frontend
     return jsonify({
         "message": "Lecture uploaded successfully!",
         "lecture_id": new_lecture.lecture_id,
-        "title": new_lecture.title
+        "title": new_lecture.title,
+        "scene_detection_status": scene_detection_status
     }), 201    
     
     
@@ -167,6 +186,42 @@ def get_lecture(lecture_id):
         "video_path": lecture.video_path,
         "slides_pdf_path": lecture.slides_pdf_path,
         "created_at": lecture.created_at.isoformat() if lecture.created_at else None
+    }), 200
+    
+
+
+# Get all detected scenes for a lecture
+@main.route("/api/lectures/<int:lecture_id>/scenes", methods=["GET"])
+def get_lecture_scenes(lecture_id):
+
+    # Check if the lecture exists
+    lecture = Lecture.query.get(lecture_id)
+
+    if not lecture:
+        return jsonify({
+            "error": "Lecture not found."
+        }), 404
+
+    # Get all scenes associated with this lecture
+    scenes = Scene.query.filter_by(
+        lecture_id=lecture_id
+    ).order_by(Scene.start_time).all()
+
+    # Create a list to store scene information
+    scene_list = []
+
+    # Go through each detected scene
+    for scene in scenes:
+        scene_list.append({
+            "scene_id": scene.scene_id,
+            "start_time": scene.start_time,
+            "end_time": scene.end_time
+        })
+
+    # Return the scenes as JSON
+    return jsonify({
+        "lecture_id": lecture_id,
+        "scenes": scene_list
     }), 200
     
     
