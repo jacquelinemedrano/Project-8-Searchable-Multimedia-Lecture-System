@@ -2,7 +2,8 @@
 # Import PySceneDetect tools
 from scenedetect import open_video, SceneManager
 from scenedetect.detectors import ContentDetector
-
+from .database import db
+from .models import Scene
 
 # Detect scene changes in a lecture video
 def detect_video_scenes(video_path):
@@ -42,3 +43,31 @@ def detect_video_scenes(video_path):
 
     # Return all detected scenes
     return scenes
+
+
+# Save detected scenes into the database
+def save_scenes_to_database(lecture_id, scenes):
+
+    # Remove previously detected scenes for this lecture
+    Scene.query.filter_by(lecture_id=lecture_id).delete()
+
+    # Go through each detected scene
+    for scene in scenes:
+
+        # Create a new Scene database record
+        new_scene = Scene()
+
+        # Assign the scene information
+        new_scene.lecture_id = lecture_id
+        new_scene.start_time = scene["start_time"]
+        new_scene.end_time = scene["end_time"]
+        
+        
+
+        # Add the scene to the database
+        db.session.add(new_scene)
+
+    # Save all scenes
+    db.session.commit()
+
+    print("Scenes successfully saved!")
