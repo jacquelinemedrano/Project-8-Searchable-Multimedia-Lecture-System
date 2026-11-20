@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import SlidesTable from './SlidesTable';
 
 const VideoUploader = () => {
   const [selectedVideo, setSelectedVideo] = useState(null);
@@ -9,8 +10,8 @@ const VideoUploader = () => {
   const [statusMessage, setStatusMessage] = useState('');
   const [isError, setIsError] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadedLectureId, setUploadedLectureId] = useState(null);
 
-  // Clean up object URLs to avoid memory leaks
   useEffect(() => {
     return () => {
       if (previewUrl) {
@@ -34,6 +35,7 @@ const VideoUploader = () => {
     }
 
     setSelectedVideo(file);
+    setUploadedLectureId(null);
     resetFeedback();
 
     const objectUrl = URL.createObjectURL(file);
@@ -44,6 +46,7 @@ const VideoUploader = () => {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    setUploadedLectureId(null);
     resetFeedback();
 
     const isPdf =
@@ -69,6 +72,7 @@ const VideoUploader = () => {
 
   const handleClearPdf = () => {
     setSelectedPdf(null);
+    setUploadedLectureId(null);
     const pdfInput = document.getElementById('slides-pdf-input');
     if (pdfInput) {
       pdfInput.value = '';
@@ -94,15 +98,14 @@ const VideoUploader = () => {
     }
 
     setIsUploading(true);
+    setUploadedLectureId(null);
     setStatusMessage('');
     setIsError(false);
     setUploadProgress(0);
 
     const formData = new FormData();
-    // Matches request.files.get("video") in Flask
     formData.append('video', selectedVideo);
 
-    // Matches request.files.get("slides") in Flask
     if (selectedPdf) {
       formData.append('slides', selectedPdf);
     }
@@ -138,6 +141,13 @@ const VideoUploader = () => {
             `Success! Saved as "${response.title}"${sceneNote}${slideNote}`
           );
           setIsError(false);
+
+          if (
+            response.lecture_id &&
+            response.slide_extraction_status === 'completed'
+          ) {
+            setUploadedLectureId(response.lecture_id);
+          }
         } catch {
           setStatusMessage('Lecture uploaded successfully!');
           setIsError(false);
@@ -165,14 +175,12 @@ const VideoUploader = () => {
     xhr.send(formData);
   };
 
-  // Video is always required; a PDF is optional, so video must be present
   const canSubmit = Boolean(selectedVideo) && !isUploading;
 
   return (
     <div style={styles.container}>
       <h2>Upload Lecture</h2>
 
-      {/* Optional Title Input */}
       <div style={styles.inputGroup}>
         <label style={styles.label}>Lecture Title (Optional):</label>
         <input
@@ -185,7 +193,6 @@ const VideoUploader = () => {
         />
       </div>
 
-      {/* Required Video Input */}
       <div style={styles.inputGroup}>
         <label style={styles.label}>
           Select Video File <span style={styles.required}>*</span>:
@@ -199,7 +206,6 @@ const VideoUploader = () => {
         />
       </div>
 
-      {/* Optional Slides PDF Input (requires a video file) */}
       <div style={styles.inputGroup}>
         <label style={styles.label}>
           Select Slides PDF (Optional — requires a video):
@@ -274,13 +280,15 @@ const VideoUploader = () => {
           {statusMessage}
         </p>
       )}
+
+      {uploadedLectureId && <SlidesTable lectureId={uploadedLectureId} />}
     </div>
   );
 };
 
 const styles = {
   container: {
-    maxWidth: '500px',
+    maxWidth: '640px',
     margin: '40px auto',
     padding: '24px',
     border: '1px solid #ddd',
