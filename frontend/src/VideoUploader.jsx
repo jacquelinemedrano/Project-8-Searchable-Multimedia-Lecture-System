@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 const VideoUploader = () => {
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedVideo, setSelectedVideo] = useState(null);
+  const [selectedPdf, setSelectedPdf] = useState(null);
   const [videoTitle, setVideoTitle] = useState('');
   const [previewUrl, setPreviewUrl] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -9,23 +10,85 @@ const VideoUploader = () => {
   const [isError, setIsError] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
-  const handleFileChange = (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
+  // Clean up object URLs to avoid memory leaks
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
 
-    setSelectedFile(file);
+  const resetFeedback = () => {
     setStatusMessage('');
     setIsError(false);
     setUploadProgress(0);
+  };
 
-    // Create a local URL to preview the video in the browser
+  const handleVideoChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+
+    setSelectedVideo(file);
+    resetFeedback();
+
     const objectUrl = URL.createObjectURL(file);
     setPreviewUrl(objectUrl);
   };
 
+  const handlePdfChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    resetFeedback();
+
+    const isPdf =
+      file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+
+    if (!isPdf) {
+      event.target.value = '';
+      setSelectedPdf(null);
+      setStatusMessage('Please select a valid PDF file for slides.');
+      setIsError(true);
+      return;
+    }
+
+    setSelectedPdf(file);
+
+    if (!selectedVideo) {
+      setStatusMessage(
+        'PDF selected — you must also select a video file before uploading.'
+      );
+      setIsError(true);
+    }
+  };
+
+  const handleClearPdf = () => {
+    setSelectedPdf(null);
+    const pdfInput = document.getElementById('slides-pdf-input');
+    if (pdfInput) {
+      pdfInput.value = '';
+    }
+    if (
+      statusMessage ===
+      'PDF selected — you must also select a video file before uploading.'
+    ) {
+      setStatusMessage('');
+      setIsError(false);
+    }
+  };
+
   const handleUpload = () => {
-    if (!selectedFile) {
-      setStatusMessage('Please select a video file first.');
+    if (!selectedVideo) {
+      setStatusMessage(
+        selectedPdf
+          ? 'A video file is required whenever uploading a PDF.'
+          : 'Please select a video file first.'
+      );
       setIsError(true);
       return;
     }
@@ -33,19 +96,23 @@ const VideoUploader = () => {
     setIsUploading(true);
     setStatusMessage('');
     setIsError(false);
+    setUploadProgress(0);
 
     const formData = new FormData();
-    // 'video' matches the key expected by Flask: request.files['video']
-    formData.append('video', selectedFile);
+    // Matches request.files.get("video") in Flask
+    formData.append('video', selectedVideo);
 
-    // Only append the title if the user typed something; otherwise, skip it
+    // Matches request.files.get("slides") in Flask
+    if (selectedPdf) {
+      formData.append('slides', selectedPdf);
+    }
+
     if (videoTitle.trim() !== '') {
       formData.append('title', videoTitle.trim());
     }
 
     const xhr = new XMLHttpRequest();
 
-    // Track upload progress
     xhr.upload.addEventListener('progress', (event) => {
       if (event.lengthComputable) {
         const percentComplete = Math.round((event.loaded / event.total) * 100);
@@ -53,13 +120,28 @@ const VideoUploader = () => {
       }
     });
 
-    // Handle completion
     xhr.addEventListener('load', () => {
       setIsUploading(false);
-      if (xhr.status === 200 || xhr.status === 201 ) {
-        const response = JSON.parse(xhr.responseText);
-        setStatusMessage(`Success! Saved as ${response.title}`);
-        setIsError(false);
+      if (xhr.status === 200 || xhr.status === 201) {
+        try {
+          const response = JSON.parse(xhr.responseText);
+          const slideNote =
+            response.slide_extraction_status &&
+            response.slide_extraction_status !== 'not_applicable'
+              ? ` | Slides: ${response.slide_extraction_status}`
+              : '';
+          const sceneNote = response.scene_detection_status
+            ? ` | Scenes: ${response.scene_detection_status}`
+            : '';
+
+          setStatusMessage(
+            `Success! Saved as "${response.title}"${sceneNote}${slideNote}`
+          );
+          setIsError(false);
+        } catch {
+          setStatusMessage('Lecture uploaded successfully!');
+          setIsError(false);
+        }
       } else {
         try {
           const errorResponse = JSON.parse(xhr.responseText);
@@ -71,10 +153,11 @@ const VideoUploader = () => {
       }
     });
 
-    // Handle network errors
     xhr.addEventListener('error', () => {
       setIsUploading(false);
-      setStatusMessage('Network error. Ensure the Flask server is running on port 5000.');
+      setStatusMessage(
+        'Network error. Ensure the Flask server is running on port 5000.'
+      );
       setIsError(true);
     });
 
@@ -82,16 +165,19 @@ const VideoUploader = () => {
     xhr.send(formData);
   };
 
+  // Video is always required; a PDF is optional, so video must be present
+  const canSubmit = Boolean(selectedVideo) && !isUploading;
+
   return (
     <div style={styles.container}>
-      <h2>Upload</h2>
-      
+      <h2>Upload Lecture</h2>
+
       {/* Optional Title Input */}
       <div style={styles.inputGroup}>
-        <label style={styles.label}>Video Title (Optional):</label>
-        <input 
-          type="text" 
-          placeholder="Lecture Title" 
+        <label style={styles.label}>Lecture Title (Optional):</label>
+        <input
+          type="text"
+          placeholder="Lecture Title"
           value={videoTitle}
           onChange={(e) => setVideoTitle(e.target.value)}
           disabled={isUploading}
@@ -99,39 +185,75 @@ const VideoUploader = () => {
         />
       </div>
 
+      {/* Required Video Input */}
       <div style={styles.inputGroup}>
-        <label style={styles.label}>Select Video File:</label>
-        <input 
-          type="file" 
-          accept="video/*" 
-          onChange={handleFileChange} 
+        <label style={styles.label}>
+          Select Video File <span style={styles.required}>*</span>:
+        </label>
+        <input
+          type="file"
+          accept="video/*"
+          onChange={handleVideoChange}
           disabled={isUploading}
           style={styles.fileInput}
         />
       </div>
 
-      {previewUrl && (
+      {/* Optional Slides PDF Input (requires a video file) */}
+      <div style={styles.inputGroup}>
+        <label style={styles.label}>
+          Select Slides PDF (Optional — requires a video):
+        </label>
+        <input
+          id="slides-pdf-input"
+          type="file"
+          accept="application/pdf,.pdf"
+          onChange={handlePdfChange}
+          disabled={isUploading}
+          style={styles.fileInput}
+        />
+        {selectedPdf && (
+          <div style={styles.pdfBadgeRow}>
+            <span style={styles.fileInfo}>
+              PDF: <strong>{selectedPdf.name}</strong> (
+              {(selectedPdf.size / (1024 * 1024)).toFixed(2)} MB)
+            </span>
+            <button
+              type="button"
+              onClick={handleClearPdf}
+              disabled={isUploading}
+              style={styles.clearButton}
+            >
+              Remove PDF
+            </button>
+          </div>
+        )}
+      </div>
+
+      {previewUrl && selectedVideo && (
         <div style={styles.previewContainer}>
-          <video 
-            src={previewUrl} 
-            controls 
-            style={styles.videoPlayer} 
-          />
+          <video src={previewUrl} controls style={styles.videoPlayer} />
           <p style={styles.fileInfo}>
-            Selected: <strong>{selectedFile.name}</strong> ({(selectedFile.size / (1024 * 1024)).toFixed(2)} MB)
+            Video: <strong>{selectedVideo.name}</strong> (
+            {(selectedVideo.size / (1024 * 1024)).toFixed(2)} MB)
           </p>
         </div>
       )}
 
-      <button 
-        onClick={handleUpload} 
-        disabled={!selectedFile || isUploading}
+      <button
+        onClick={handleUpload}
+        disabled={!canSubmit}
         style={{
           ...styles.button,
-          opacity: (!selectedFile || isUploading) ? 0.6 : 1
+          opacity: canSubmit ? 1 : 0.6,
+          cursor: canSubmit ? 'pointer' : 'not-allowed',
         }}
       >
-        {isUploading ? 'Uploading...' : 'Upload Video'}
+        {isUploading
+          ? 'Uploading...'
+          : selectedPdf
+            ? 'Upload Video & Slides'
+            : 'Upload Video'}
       </button>
 
       {isUploading && (
@@ -143,10 +265,12 @@ const VideoUploader = () => {
       )}
 
       {statusMessage && (
-        <p style={{ 
-          ...styles.status, 
-          color: isError ? '#d9534f' : '#28a745' 
-        }}>
+        <p
+          style={{
+            ...styles.status,
+            color: isError ? '#b02a37' : '#1e7e34',
+          }}
+        >
           {statusMessage}
         </p>
       )}
@@ -154,7 +278,6 @@ const VideoUploader = () => {
   );
 };
 
-// Basic inline styles for clean presentation
 const styles = {
   container: {
     maxWidth: '500px',
@@ -165,17 +288,20 @@ const styles = {
     fontFamily: 'system-ui, -apple-system, sans-serif',
     textAlign: 'left',
     boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
-    backgroundColor: 'lightgrey'
+    backgroundColor: 'lightgrey',
   },
   inputGroup: {
-    marginBottom: '16px'
+    marginBottom: '16px',
   },
   label: {
     display: 'block',
     marginBottom: '6px',
     fontWeight: '500',
     fontSize: '0.9rem',
-    color: '#333'
+    color: '#333',
+  },
+  required: {
+    color: '#b02a37',
   },
   textInput: {
     width: '100%',
@@ -183,27 +309,43 @@ const styles = {
     fontSize: '0.95rem',
     borderRadius: '4px',
     border: '1px solid #ccc',
-    boxSizing: 'border-box'
+    boxSizing: 'border-box',
   },
   fileInput: {
     display: 'block',
-    width: '100%'
+    width: '100%',
+  },
+  pdfBadgeRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '8px',
+    marginTop: '6px',
+  },
+  clearButton: {
+    padding: '4px 10px',
+    fontSize: '0.8rem',
+    backgroundColor: '#fff',
+    color: '#333',
+    border: '1px solid #aaa',
+    borderRadius: '4px',
+    cursor: 'pointer',
   },
   previewContainer: {
     marginBottom: '20px',
     marginTop: '20px',
-    textAlign: 'center'
+    textAlign: 'center',
   },
   videoPlayer: {
     width: '100%',
     maxHeight: '300px',
     borderRadius: '6px',
-    backgroundColor: '#000'
+    backgroundColor: '#000',
   },
   fileInfo: {
     fontSize: '0.9rem',
-    color: '#555',
-    marginTop: '8px'
+    color: '#444',
+    margin: '6px 0 0 0',
   },
   button: {
     width: '100%',
@@ -213,14 +355,13 @@ const styles = {
     color: '#fff',
     border: 'none',
     borderRadius: '4px',
-    cursor: 'pointer'
   },
   progressContainer: {
     width: '100%',
     backgroundColor: '#e9ecef',
     borderRadius: '4px',
     marginTop: '20px',
-    overflow: 'hidden'
+    overflow: 'hidden',
   },
   progressBar: {
     height: '24px',
@@ -229,13 +370,13 @@ const styles = {
     lineHeight: '24px',
     fontSize: '0.85rem',
     textAlign: 'center',
-    transition: 'width 0.2s ease'
+    transition: 'width 0.2s ease',
   },
   status: {
     marginTop: '16px',
     fontWeight: '500',
-    textAlign: 'center'
-  }
+    textAlign: 'center',
+  },
 };
 
 export default VideoUploader;
