@@ -1,11 +1,12 @@
 import os
 import uuid
+import shutil
 
 from flask import Blueprint, jsonify, request, current_app, send_file
 from werkzeug.utils import secure_filename
 
 from .database import db
-from .models import Lecture, Scene, Slide
+from .models import Lecture, Scene, Slide, TranscriptSegment
 from .scene_detection import detect_video_scenes, save_scenes_to_database
 from .slide_extraction import extract_pdf_slides, save_slides_to_database
 
@@ -349,34 +350,83 @@ def get_lecture_video(lecture_id):
     # Send the video file as a response to the frontend
     return send_file(lecture.video_path)
 
-    # Delete a lecture entry by its ID from the database and remove local files
+   # Delete a lecture and all its associated data
 @main.route("/api/lectures/<int:lecture_id>", methods=["DELETE"])
 def delete_lecture(lecture_id):
+
+    # Find the lecture
     lecture = Lecture.query.get(lecture_id)
+
     if not lecture:
         return jsonify({
             "error": "Lecture not found."
         }), 404
 
+    # Store file paths before deleting the lecture
+    video_path = lecture.video_path
+    pdf_path = lecture.slides_pdf_path
+
+    # Get the folder containing extracted slide images
+    slides_folder = os.path.join(
+        current_app.config["UPLOAD_FOLDER"],
+        f"lecture_{lecture_id}_slides"
+    )
+
     try:
-        # Remove local video file if it exists
-        if lecture.video_path and os.path.exists(lecture.video_path):
-            os.remove(lecture.video_path)
+        # Delete associated scene records
+        Scene.query.filter_by(
+            lecture_id=lecture_id
+        ).delete()
 
-        # Remove local slides file if it exists
-        if lecture.slides_pdf_path and os.path.exists(lecture.slides_pdf_path):
-            os.remove(lecture.slides_pdf_path)
+        # Delete associated slide records
+        Slide.query.filter_by(
+            lecture_id=lecture_id
+        ).delete()
 
+        # Delete associated transcript records
+        TranscriptSegment.query.filter_by(
+            lecture_id=lecture_id
+        ).delete()
+
+        # Delete the lecture record
         db.session.delete(lecture)
+
+        # Save database changes
         db.session.commit()
+
     except Exception:
         db.session.rollback()
+
+        current_app.logger.exception("Lecture deletion failed")
+
         return jsonify({
             "error": "Could not delete the lecture."
         }), 500
 
+    # Remove the video file
+    try:
+        if video_path and os.path.exists(video_path):
+            os.remove(video_path)
+
+        # Remove the original PDF
+        if pdf_path and os.path.exists(pdf_path):
+            os.remove(pdf_path)
+
+        # Remove the extracted slide images folder
+        if os.path.exists(slides_folder):
+            shutil.rmtree(slides_folder)
+
+    except OSError:
+        current_app.logger.exception(
+            "Lecture files could not be completely removed"
+        )
+
+        return jsonify({
+            "message": "Lecture deleted from database, but some files could not be removed.",
+            "lecture_id": lecture_id
+        }), 200
+
     return jsonify({
-        "message": "Lecture deleted successfully!",
+        "message": "Lecture and associated data deleted successfully!",
         "lecture_id": lecture_id
     }), 200
-    
