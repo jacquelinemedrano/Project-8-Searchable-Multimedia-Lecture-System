@@ -5,8 +5,9 @@ from flask import Blueprint, jsonify, request, current_app, send_file
 from werkzeug.utils import secure_filename
 
 from .database import db
-from .models import Lecture, Scene
+from .models import Lecture, Scene, Slide
 from .scene_detection import detect_video_scenes, save_scenes_to_database
+from .slide_extraction import extract_pdf_slides, save_slides_to_database
 
 # Create a blueprint for our routes
 main = Blueprint("main", __name__)
@@ -136,13 +137,35 @@ def upload_lecture():
         # Log the error without failing the lecture upload
         current_app.logger.exception("Scene detection failed")
         scene_detection_status = "failed"
+        
+   
+    # Extract and save slides if a PDF was uploaded
+    slide_extraction_status = "not_applicable"
 
+    if slides_pdf_path:
+
+        try:
+            slides = extract_pdf_slides(
+                slides_pdf_path,
+                new_lecture.lecture_id,
+                current_app.config["UPLOAD_FOLDER"]
+            )
+
+            save_slides_to_database(new_lecture.lecture_id, slides)
+
+            slide_extraction_status = "completed"
+
+        except Exception as e:
+            current_app.logger.exception("Slide extraction failed")
+            slide_extraction_status = "failed"
+        
     # Send a response back to the frontend
     return jsonify({
         "message": "Lecture uploaded successfully!",
         "lecture_id": new_lecture.lecture_id,
         "title": new_lecture.title,
-        "scene_detection_status": scene_detection_status
+        "scene_detection_status": scene_detection_status,
+        "slide_extraction_status": slide_extraction_status
     }), 201    
     
     
@@ -223,6 +246,86 @@ def get_lecture_scenes(lecture_id):
         "lecture_id": lecture_id,
         "scenes": scene_list
     }), 200
+    
+   
+   
+   
+   # Get all extracted slides for a lecture
+@main.route("/api/lectures/<int:lecture_id>/slides", methods=["GET"])
+def get_lecture_slides(lecture_id):
+
+    # Check if the lecture exists
+    lecture = Lecture.query.get(lecture_id)
+
+    if not lecture:
+        return jsonify({
+            "error": "Lecture not found."
+        }), 404
+
+    # Get all slides associated with this lecture
+    slides = Slide.query.filter_by(
+        lecture_id=lecture_id
+    ).order_by(Slide.slide_number).all()
+
+    # Create a list to store slide information
+    slide_list = []
+
+    # Go through each slide
+    for slide in slides:
+        slide_list.append({
+            "slide_id": slide.slide_id,
+            "slide_number": slide.slide_number,
+            "image_path": slide.image_path
+        })
+
+    # Return the slides as JSON
+    return jsonify({
+        "lecture_id": lecture_id,
+        "slides": slide_list
+    }), 200
+    
+    
+    
+    
+    
+    # Get an individual slide image
+@main.route(
+    "/api/lectures/<int:lecture_id>/slides/<int:slide_number>/image",
+    methods=["GET"]
+)
+def get_slide_image(lecture_id, slide_number):
+
+    # Check if the lecture exists
+    lecture = Lecture.query.get(lecture_id)
+
+    if not lecture:
+        return jsonify({
+            "error": "Lecture not found."
+        }), 404
+
+    # Find the requested slide
+    slide = Slide.query.filter_by(
+        lecture_id=lecture_id,
+        slide_number=slide_number
+    ).first()
+
+    if not slide:
+        return jsonify({
+            "error": "Slide not found."
+        }), 404
+
+    # Check if the image file exists
+    if not os.path.exists(slide.image_path):
+        return jsonify({
+            "error": "Slide image file not found."
+        }), 404
+
+    # Return the actual slide image
+    return send_file(
+        slide.image_path,
+        mimetype="image/png"
+    )
+    
     
     
     

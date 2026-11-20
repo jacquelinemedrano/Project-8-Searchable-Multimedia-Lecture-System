@@ -21,3 +21,8 @@ __pycache__/
 # Postman local files
 .postman/
 postman/
+
+#React / Node.js
+node_modules/
+frontend/dist/
+frontend/build/
