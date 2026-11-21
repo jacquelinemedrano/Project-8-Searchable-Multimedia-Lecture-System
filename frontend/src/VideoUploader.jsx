@@ -1,9 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import SlidesTable from './SlidesTable';
 
+const DETECTION_PRESETS = {
+  regular: {
+    label: 'Regular Detection (Threshold: 12)',
+    threshold: 12,
+  },
+  sensitive: {
+    label: 'Sensitive Detection (Threshold: 3)',
+    threshold: 3,
+  },
+};
+
 const VideoUploader = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [videoTitle, setVideoTitle] = useState('');
+  const [detectionMode, setDetectionMode] = useState('regular');
   const [previewUrl, setPreviewUrl] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [statusMessage, setStatusMessage] = useState('');
@@ -44,6 +56,8 @@ const VideoUploader = () => {
       return;
     }
 
+    const activeThreshold = DETECTION_PRESETS[detectionMode]?.threshold ?? 12;
+
     setIsUploading(true);
     setUploadedLectureId(null);
     setStatusMessage('');
@@ -52,6 +66,7 @@ const VideoUploader = () => {
 
     const formData = new FormData();
     formData.append('video', selectedFile);
+    formData.append('threshold', String(activeThreshold));
 
     if (videoTitle.trim() !== '') {
       formData.append('title', videoTitle.trim());
@@ -130,6 +145,26 @@ const VideoUploader = () => {
           disabled={isUploading}
           style={styles.textInput}
         />
+      </div>
+
+      <div style={styles.inputGroup}>
+        <label htmlFor="detection-mode-select" style={styles.label}>
+          Scene Detection Mode:
+        </label>
+        <select
+          id="detection-mode-select"
+          value={detectionMode}
+          onChange={(e) => setDetectionMode(e.target.value)}
+          disabled={isUploading}
+          style={styles.selectInput}
+        >
+          <option value="regular">
+            Regular Detection (Threshold: 12)
+          </option>
+          <option value="sensitive">
+            Sensitive Detection (Threshold: 3)
+          </option>
+        </select>
       </div>
 
       <div style={styles.inputGroup}>
@@ -217,6 +252,16 @@ const styles = {
     fontSize: '0.95rem',
     borderRadius: '4px',
     border: '1px solid #ccc',
+    boxSizing: 'border-box',
+  },
+  selectInput: {
+    width: '100%',
+    padding: '8px 12px',
+    fontSize: '0.95rem',
+    borderRadius: '4px',
+    border: '1px solid #ccc',
+    backgroundColor: '#fff',
+    color: '#222',
     boxSizing: 'border-box',
   },
   fileInput: {

@@ -28,7 +28,7 @@ def health_check():
 
 
     
-#upload lecture videos and slides
+# upload lecture videos and slides
 @main.route("/api/lectures/uploads", methods=["POST"])
 def upload_lecture():
     video = request.files.get("video")
@@ -45,6 +45,20 @@ def upload_lecture():
     if video_extension not in allowed_videos:
         return jsonify({
             "error": "Unsupported video file type."
+        }), 400
+
+    # Parse optional detection threshold (defaults to 27.0 for Regular Detection)
+    raw_threshold = request.form.get("threshold", "27.0").strip()
+    try:
+        threshold = float(raw_threshold)
+    except ValueError:
+        return jsonify({
+            "error": "Invalid threshold value."
+        }), 400
+
+    if threshold <= 0:
+        return jsonify({
+            "error": "Threshold must be greater than 0."
         }), 400
 
     unique_video_name = str(uuid.uuid4()) + "." + video_extension
@@ -75,10 +89,11 @@ def upload_lecture():
 
     scenes = []
     try:
-        scenes = detect_video_scenes(video_path)
+        scenes = detect_video_scenes(video_path, threshold=threshold)
         save_scenes_to_database(new_lecture.lecture_id, scenes)
         scene_detection_status = "completed"
     except Exception:
+        db.session.rollback()
         current_app.logger.exception("Scene detection failed")
         scene_detection_status = "failed"
 
@@ -88,10 +103,12 @@ def upload_lecture():
             lecture_id=new_lecture.lecture_id,
             upload_folder=upload_folder,
             scenes=scenes if scene_detection_status == "completed" else None,
+            threshold=threshold,
         )
         save_video_slides_to_database(new_lecture.lecture_id, slides)
         slide_extraction_status = "completed"
     except Exception:
+        db.session.rollback()
         current_app.logger.exception("Video slide extraction failed")
         slide_extraction_status = "failed"
 
@@ -99,9 +116,10 @@ def upload_lecture():
         "message": "Lecture uploaded successfully!",
         "lecture_id": new_lecture.lecture_id,
         "title": new_lecture.title,
+        "threshold": threshold,
         "scene_detection_status": scene_detection_status,
         "slide_extraction_status": slide_extraction_status
-    }), 201 
+    }), 201
     
     
     

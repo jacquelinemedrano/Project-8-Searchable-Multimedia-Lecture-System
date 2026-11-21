@@ -9,7 +9,7 @@ from .database import db
 from .models import Scene, Slide
 
 # Detect scene changes in a lecture video
-def detect_video_scenes(video_path):
+def detect_video_scenes(video_path, threshold=12.0, min_scene_len=12):
 
     # Open the uploaded video
     video = open_video(video_path)
@@ -20,7 +20,7 @@ def detect_video_scenes(video_path):
     # Add the content detector
     # It detects changes between consecutive video frames
     scene_manager.add_detector(
-        ContentDetector(threshold=15.0, min_scene_len=25)
+        ContentDetector(threshold=threshold, min_scene_len=min_scene_len)
     )
 
     # Analyze the video and detect scene changes
@@ -75,9 +75,9 @@ def save_scenes_to_database(lecture_id, scenes):
 
     print("Scenes successfully saved!")
 
-def extract_slides_from_video(video_path, lecture_id, upload_folder, scenes=None):
+def extract_slides_from_video(video_path, lecture_id, upload_folder, scenes=None, threshold=12.0):
     if scenes is None:
-        scenes = detect_video_scenes(video_path)
+        scenes = detect_video_scenes(video_path, threshold=threshold)
 
     slides_folder = os.path.join(
         upload_folder,
