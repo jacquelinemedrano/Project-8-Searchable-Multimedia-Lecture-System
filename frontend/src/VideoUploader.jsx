@@ -2,8 +2,7 @@ import React, { useEffect, useState } from 'react';
 import SlidesTable from './SlidesTable';
 
 const VideoUploader = () => {
-  const [selectedVideo, setSelectedVideo] = useState(null);
-  const [selectedPdf, setSelectedPdf] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(null);
   const [videoTitle, setVideoTitle] = useState('');
   const [previewUrl, setPreviewUrl] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -20,13 +19,7 @@ const VideoUploader = () => {
     };
   }, [previewUrl]);
 
-  const resetFeedback = () => {
-    setStatusMessage('');
-    setIsError(false);
-    setUploadProgress(0);
-  };
-
-  const handleVideoChange = (event) => {
+  const handleFileChange = (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -34,65 +27,19 @@ const VideoUploader = () => {
       URL.revokeObjectURL(previewUrl);
     }
 
-    setSelectedVideo(file);
+    setSelectedFile(file);
     setUploadedLectureId(null);
-    resetFeedback();
+    setStatusMessage('');
+    setIsError(false);
+    setUploadProgress(0);
 
     const objectUrl = URL.createObjectURL(file);
     setPreviewUrl(objectUrl);
   };
 
-  const handlePdfChange = (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    setUploadedLectureId(null);
-    resetFeedback();
-
-    const isPdf =
-      file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-
-    if (!isPdf) {
-      event.target.value = '';
-      setSelectedPdf(null);
-      setStatusMessage('Please select a valid PDF file for slides.');
-      setIsError(true);
-      return;
-    }
-
-    setSelectedPdf(file);
-
-    if (!selectedVideo) {
-      setStatusMessage(
-        'PDF selected — you must also select a video file before uploading.'
-      );
-      setIsError(true);
-    }
-  };
-
-  const handleClearPdf = () => {
-    setSelectedPdf(null);
-    setUploadedLectureId(null);
-    const pdfInput = document.getElementById('slides-pdf-input');
-    if (pdfInput) {
-      pdfInput.value = '';
-    }
-    if (
-      statusMessage ===
-      'PDF selected — you must also select a video file before uploading.'
-    ) {
-      setStatusMessage('');
-      setIsError(false);
-    }
-  };
-
   const handleUpload = () => {
-    if (!selectedVideo) {
-      setStatusMessage(
-        selectedPdf
-          ? 'A video file is required whenever uploading a PDF.'
-          : 'Please select a video file first.'
-      );
+    if (!selectedFile) {
+      setStatusMessage('Please select a video file first.');
       setIsError(true);
       return;
     }
@@ -104,11 +51,7 @@ const VideoUploader = () => {
     setUploadProgress(0);
 
     const formData = new FormData();
-    formData.append('video', selectedVideo);
-
-    if (selectedPdf) {
-      formData.append('slides', selectedPdf);
-    }
+    formData.append('video', selectedFile);
 
     if (videoTitle.trim() !== '') {
       formData.append('title', videoTitle.trim());
@@ -128,13 +71,11 @@ const VideoUploader = () => {
       if (xhr.status === 200 || xhr.status === 201) {
         try {
           const response = JSON.parse(xhr.responseText);
-          const slideNote =
-            response.slide_extraction_status &&
-            response.slide_extraction_status !== 'not_applicable'
-              ? ` | Slides: ${response.slide_extraction_status}`
-              : '';
           const sceneNote = response.scene_detection_status
             ? ` | Scenes: ${response.scene_detection_status}`
+            : '';
+          const slideNote = response.slide_extraction_status
+            ? ` | Slides: ${response.slide_extraction_status}`
             : '';
 
           setStatusMessage(
@@ -175,14 +116,12 @@ const VideoUploader = () => {
     xhr.send(formData);
   };
 
-  const canSubmit = Boolean(selectedVideo) && !isUploading;
-
   return (
     <div style={styles.container}>
       <h2>Upload Lecture</h2>
 
       <div style={styles.inputGroup}>
-        <label style={styles.label}>Lecture Title (Optional):</label>
+        <label style={styles.label}>Video Title (Optional):</label>
         <input
           type="text"
           placeholder="Lecture Title"
@@ -194,72 +133,36 @@ const VideoUploader = () => {
       </div>
 
       <div style={styles.inputGroup}>
-        <label style={styles.label}>
-          Select Video File <span style={styles.required}>*</span>:
-        </label>
+        <label style={styles.label}>Select Video File:</label>
         <input
           type="file"
           accept="video/*"
-          onChange={handleVideoChange}
+          onChange={handleFileChange}
           disabled={isUploading}
           style={styles.fileInput}
         />
       </div>
 
-      <div style={styles.inputGroup}>
-        <label style={styles.label}>
-          Select Slides PDF (Optional — requires a video):
-        </label>
-        <input
-          id="slides-pdf-input"
-          type="file"
-          accept="application/pdf,.pdf"
-          onChange={handlePdfChange}
-          disabled={isUploading}
-          style={styles.fileInput}
-        />
-        {selectedPdf && (
-          <div style={styles.pdfBadgeRow}>
-            <span style={styles.fileInfo}>
-              PDF: <strong>{selectedPdf.name}</strong> (
-              {(selectedPdf.size / (1024 * 1024)).toFixed(2)} MB)
-            </span>
-            <button
-              type="button"
-              onClick={handleClearPdf}
-              disabled={isUploading}
-              style={styles.clearButton}
-            >
-              Remove PDF
-            </button>
-          </div>
-        )}
-      </div>
-
-      {previewUrl && selectedVideo && (
+      {previewUrl && selectedFile && (
         <div style={styles.previewContainer}>
           <video src={previewUrl} controls style={styles.videoPlayer} />
           <p style={styles.fileInfo}>
-            Video: <strong>{selectedVideo.name}</strong> (
-            {(selectedVideo.size / (1024 * 1024)).toFixed(2)} MB)
+            Selected: <strong>{selectedFile.name}</strong> (
+            {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB)
           </p>
         </div>
       )}
 
       <button
         onClick={handleUpload}
-        disabled={!canSubmit}
+        disabled={!selectedFile || isUploading}
         style={{
           ...styles.button,
-          opacity: canSubmit ? 1 : 0.6,
-          cursor: canSubmit ? 'pointer' : 'not-allowed',
+          opacity: !selectedFile || isUploading ? 0.6 : 1,
+          cursor: !selectedFile || isUploading ? 'not-allowed' : 'pointer',
         }}
       >
-        {isUploading
-          ? 'Uploading...'
-          : selectedPdf
-            ? 'Upload Video & Slides'
-            : 'Upload Video'}
+        {isUploading ? 'Uploading & Extracting...' : 'Upload Video'}
       </button>
 
       {isUploading && (
@@ -308,9 +211,6 @@ const styles = {
     fontSize: '0.9rem',
     color: '#333',
   },
-  required: {
-    color: '#b02a37',
-  },
   textInput: {
     width: '100%',
     padding: '8px 12px',
@@ -322,22 +222,6 @@ const styles = {
   fileInput: {
     display: 'block',
     width: '100%',
-  },
-  pdfBadgeRow: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: '8px',
-    marginTop: '6px',
-  },
-  clearButton: {
-    padding: '4px 10px',
-    fontSize: '0.8rem',
-    backgroundColor: '#fff',
-    color: '#333',
-    border: '1px solid #aaa',
-    borderRadius: '4px',
-    cursor: 'pointer',
   },
   previewContainer: {
     marginBottom: '20px',
@@ -353,7 +237,7 @@ const styles = {
   fileInfo: {
     fontSize: '0.9rem',
     color: '#444',
-    margin: '6px 0 0 0',
+    marginTop: '8px',
   },
   button: {
     width: '100%',
