@@ -2,8 +2,24 @@ import React, { useEffect, useState } from 'react';
 
 const API_BASE_URL = 'http://localhost:5000';
 
+const formatTimestamp = (seconds) => {
+  if (typeof seconds !== 'number' || Number.isNaN(seconds) || seconds < 0) {
+    return '—';
+  }
+  const totalSeconds = Math.floor(seconds);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const secs = totalSeconds % 60;
+
+  const pad = (n) => String(n).padStart(2, '0');
+  return hours > 0
+    ? `${hours}:${pad(minutes)}:${pad(secs)}`
+    : `${pad(minutes)}:${pad(secs)}`;
+};
+
 const SlidesTable = ({ lectureId }) => {
   const [slides, setSlides] = useState([]);
+  const [scenes, setScenes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -12,23 +28,32 @@ const SlidesTable = ({ lectureId }) => {
 
     let isCancelled = false;
 
-    const fetchSlides = async () => {
+    const fetchSlidesAndScenes = async () => {
       setLoading(true);
       setError('');
       setSlides([]);
+      setScenes([]);
 
       try {
-        const response = await fetch(
-          `${API_BASE_URL}/api/lectures/${lectureId}/slides`
-        );
-        const data = await response.json();
+        const [slidesRes, scenesRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/api/lectures/${lectureId}/slides`),
+          fetch(`${API_BASE_URL}/api/lectures/${lectureId}/scenes`),
+        ]);
 
-        if (!response.ok) {
-          throw new Error(data.error || 'Failed to load slides.');
+        const slidesData = await slidesRes.json();
+        if (!slidesRes.ok) {
+          throw new Error(slidesData.error || 'Failed to load slides.');
+        }
+
+        let sceneList = [];
+        if (scenesRes.ok) {
+          const scenesData = await scenesRes.json();
+          sceneList = Array.isArray(scenesData.scenes) ? scenesData.scenes : [];
         }
 
         if (!isCancelled) {
-          setSlides(Array.isArray(data.slides) ? data.slides : []);
+          setSlides(Array.isArray(slidesData.slides) ? slidesData.slides : []);
+          setScenes(sceneList);
         }
       } catch (err) {
         if (!isCancelled) {
@@ -41,7 +66,7 @@ const SlidesTable = ({ lectureId }) => {
       }
     };
 
-    fetchSlides();
+    fetchSlidesAndScenes();
 
     return () => {
       isCancelled = true;
@@ -70,12 +95,19 @@ const SlidesTable = ({ lectureId }) => {
             <thead>
               <tr>
                 <th style={tableStyles.th}>Preview</th>
+                <th style={tableStyles.th}>Timestamp</th>
                 <th style={tableStyles.th}>Image</th>
               </tr>
             </thead>
             <tbody>
-              {slides.map((slide) => {
+              {slides.map((slide, index) => {
+                const matchedScene =
+                  scenes[slide.slide_number - 1] ?? scenes[index] ?? null;
                 const imageUrl = `${API_BASE_URL}/api/lectures/${lectureId}/slides/${slide.slide_number}/image`;
+
+                const timestampLabel = matchedScene
+                  ? `${formatTimestamp(matchedScene.start_time)} – ${formatTimestamp(matchedScene.end_time)}`
+                  : '—';
 
                 return (
                   <tr
@@ -89,6 +121,11 @@ const SlidesTable = ({ lectureId }) => {
                         style={tableStyles.thumbnail}
                         loading="lazy"
                       />
+                    </td>
+                    <td style={tableStyles.td}>
+                      <span style={tableStyles.timestamp}>
+                        {timestampLabel}
+                      </span>
                     </td>
                     <td style={tableStyles.td}>
                       <a
@@ -164,6 +201,11 @@ const tableStyles = {
     borderRadius: '4px',
     border: '1px solid #ddd',
     display: 'block',
+  },
+  timestamp: {
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+    fontSize: '0.88rem',
+    color: '#222',
   },
   link: {
     color: '#0056b3',
