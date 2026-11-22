@@ -10,7 +10,8 @@ const formatCreatedAt = (isoString) => {
   return parsed.toLocaleString();
 };
 
-const UploadedLectures = ({ refreshKey = 0 }) => {
+const UploadedLectures = ({ refreshKey = 0, defaultExpanded = false }) => {
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const [lectures, setLectures] = useState([]);
   const [selectedLectureId, setSelectedLectureId] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -29,7 +30,12 @@ const UploadedLectures = ({ refreshKey = 0 }) => {
         throw new Error(data.error || 'Failed to load uploaded lectures.');
       }
 
-      const list = Array.isArray(data) ? data : [];
+      const list = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.lectures)
+          ? data.lectures
+          : [];
+
       setLectures(list);
 
       setSelectedLectureId((prevSelected) => {
@@ -79,86 +85,115 @@ const UploadedLectures = ({ refreshKey = 0 }) => {
   return (
     <div style={styles.container}>
       <div style={styles.headerRow}>
-        <h2 style={styles.heading}>Uploaded Lectures</h2>
         <button
           type="button"
-          onClick={fetchLectures}
-          disabled={loading}
-          style={styles.refreshButton}
+          onClick={() => setIsExpanded((prev) => !prev)}
+          aria-expanded={isExpanded}
+          style={styles.toggleHeaderButton}
         >
-          {loading ? 'Refreshing...' : 'Refresh'}
+          <span style={styles.caret}>{isExpanded ? '▼' : '▶'}</span>
+          <h2 style={styles.heading}>
+            Uploaded Lectures ({lectures.length})
+          </h2>
         </button>
+
+        <div style={styles.headerActions}>
+          {isExpanded && (
+            <button
+              type="button"
+              onClick={fetchLectures}
+              disabled={loading}
+              style={styles.refreshButton}
+            >
+              {loading ? 'Refreshing...' : 'Refresh'}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setIsExpanded((prev) => !prev)}
+            style={styles.toggleButton}
+          >
+            {isExpanded ? 'Collapse' : 'Expand'}
+          </button>
+        </div>
       </div>
 
-      {error && <p style={styles.errorText}>{error}</p>}
+      {isExpanded && (
+        <div style={styles.collapsibleBody}>
+          {error && <p style={styles.errorText}>{error}</p>}
 
-      {!loading && lectures.length === 0 && (
-        <p style={styles.infoText}>No lectures have been uploaded yet.</p>
-      )}
+          {!loading && lectures.length === 0 && (
+            <p style={styles.infoText}>No lectures have been uploaded yet.</p>
+          )}
 
-      {lectures.length > 0 && (
-        <div style={styles.listWrapper}>
-          {lectures.map((lecture) => {
-            const isSelected = lecture.lecture_id === selectedLectureId;
+          {lectures.length > 0 && (
+            <div style={styles.listWrapper}>
+              {lectures.map((lecture) => {
+                const isSelected = lecture.lecture_id === selectedLectureId;
 
-            return (
-              <div
-                key={lecture.lecture_id}
-                onClick={() => setSelectedLectureId(lecture.lecture_id)}
-                style={{
-                  ...styles.lectureCard,
-                  ...(isSelected ? styles.selectedCard : {}),
-                }}
-              >
-                <div style={styles.lectureMeta}>
-                  <strong style={styles.lectureTitle}>
-                    {lecture.title || `Lecture #${lecture.lecture_id}`}
-                  </strong>
-                  <span style={styles.lectureSubtext}>
-                    Uploaded: {formatCreatedAt(lecture.created_at)}
-                  </span>
-                </div>
-
-                <div style={styles.cardActions}>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedLectureId(lecture.lecture_id);
+                return (
+                  <div
+                    key={lecture.lecture_id}
+                    onClick={() => setSelectedLectureId(lecture.lecture_id)}
+                    style={{
+                      ...styles.lectureCard,
+                      ...(isSelected ? styles.selectedCard : {}),
                     }}
-                    style={styles.viewButton}
                   >
-                    {isSelected ? 'Viewing' : 'View Slides'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => handleDeleteLecture(lecture.lecture_id, e)}
-                    disabled={deletingId === lecture.lecture_id}
-                    style={styles.deleteButton}
-                  >
-                    {deletingId === lecture.lecture_id ? 'Deleting...' : 'Delete'}
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+                    <div style={styles.lectureMeta}>
+                      <strong style={styles.lectureTitle}>
+                        {lecture.title || `Lecture #${lecture.lecture_id}`}
+                      </strong>
+                      <span style={styles.lectureSubtext}>
+                        Uploaded: {formatCreatedAt(lecture.created_at)}
+                      </span>
+                    </div>
 
-      {selectedLecture && (
-        <div style={styles.detailPanel}>
-          <h3 style={styles.detailHeading}>
-            {selectedLecture.title || `Lecture #${selectedLecture.lecture_id}`}
-          </h3>
+                    <div style={styles.cardActions}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedLectureId(lecture.lecture_id);
+                        }}
+                        style={styles.viewButton}
+                      >
+                        {isSelected ? 'Viewing' : 'View Slides'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteLecture(lecture.lecture_id, e)}
+                        disabled={deletingId === lecture.lecture_id}
+                        style={styles.deleteButton}
+                      >
+                        {deletingId === lecture.lecture_id
+                          ? 'Deleting...'
+                          : 'Delete'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
-          <video
-            key={selectedLecture.lecture_id}
-            src={`${API_BASE_URL}/api/lectures/${selectedLecture.lecture_id}/video`}
-            controls
-            style={styles.videoPlayer}
-          />
+          {selectedLecture && (
+            <div style={styles.detailPanel}>
+              <h3 style={styles.detailHeading}>
+                {selectedLecture.title ||
+                  `Lecture #${selectedLecture.lecture_id}`}
+              </h3>
 
-          <SlidesTable lectureId={selectedLecture.lecture_id} />
+              <video
+                key={selectedLecture.lecture_id}
+                src={`${API_BASE_URL}/api/lectures/${selectedLecture.lecture_id}/video`}
+                controls
+                style={styles.videoPlayer}
+              />
+
+              <SlidesTable lectureId={selectedLecture.lecture_id} />
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -169,7 +204,7 @@ const styles = {
   container: {
     maxWidth: '720px',
     margin: '40px auto',
-    padding: '24px',
+    padding: '20px 24px',
     border: '1px solid #ddd',
     borderRadius: '8px',
     fontFamily: 'system-ui, -apple-system, sans-serif',
@@ -181,21 +216,55 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: '16px',
+    gap: '12px',
+  },
+  toggleHeaderButton: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    background: 'none',
+    border: 'none',
+    padding: 0,
+    cursor: 'pointer',
+    textAlign: 'left',
+    color: '#222',
+  },
+  caret: {
+    fontSize: '0.85rem',
+    color: '#333',
   },
   heading: {
     margin: 0,
-    fontSize: '1.3rem',
+    fontSize: '1.25rem',
     color: '#222',
   },
+  headerActions: {
+    display: 'flex',
+    gap: '8px',
+    flexShrink: 0,
+  },
   refreshButton: {
-    padding: '6px 14px',
-    fontSize: '0.88rem',
+    padding: '6px 12px',
+    fontSize: '0.85rem',
     backgroundColor: '#fff',
     color: '#222',
     border: '1px solid #aaa',
     borderRadius: '4px',
     cursor: 'pointer',
+  },
+  toggleButton: {
+    padding: '6px 12px',
+    fontSize: '0.85rem',
+    backgroundColor: '#007bff',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+  },
+  collapsibleBody: {
+    marginTop: '16px',
+    paddingTop: '16px',
+    borderTop: '1px solid #bbb',
   },
   infoText: {
     fontSize: '0.92rem',
