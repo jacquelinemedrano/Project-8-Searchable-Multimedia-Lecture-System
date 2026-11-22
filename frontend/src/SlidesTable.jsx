@@ -17,7 +17,7 @@ const formatTimestamp = (seconds) => {
     : `${pad(minutes)}:${pad(secs)}`;
 };
 
-const SlidesTable = ({ lectureId }) => {
+const SlidesTable = ({ lectureId, videoRef, onSeek }) => {
   const [slides, setSlides] = useState([]);
   const [scenes, setScenes] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -73,6 +73,30 @@ const SlidesTable = ({ lectureId }) => {
     };
   }, [lectureId]);
 
+  const handleJumpToTimestamp = (seconds) => {
+    if (typeof seconds !== 'number' || Number.isNaN(seconds) || seconds < 0) {
+      return;
+    }
+
+    if (onSeek) {
+      onSeek(seconds);
+      return;
+    }
+
+    const videoEl = videoRef?.current || document.querySelector('video');
+    if (!videoEl) return;
+
+    videoEl.currentTime = seconds;
+    videoEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    const playPromise = videoEl.play?.();
+    if (playPromise && typeof playPromise.catch === 'function') {
+      playPromise.catch(() => {
+        // Ignore autoplay restrictions if paused by browser policy
+      });
+    }
+  };
+
   if (!lectureId) return null;
 
   return (
@@ -105,6 +129,11 @@ const SlidesTable = ({ lectureId }) => {
                   scenes[slide.slide_number - 1] ?? scenes[index] ?? null;
                 const imageUrl = `${API_BASE_URL}/api/lectures/${lectureId}/slides/${slide.slide_number}/image`;
 
+                const hasStartTime =
+                  typeof matchedScene?.start_time === 'number' &&
+                  !Number.isNaN(matchedScene.start_time) &&
+                  matchedScene.start_time >= 0;
+
                 const timestampLabel = matchedScene
                   ? `${formatTimestamp(matchedScene.start_time)} – ${formatTimestamp(matchedScene.end_time)}`
                   : '—';
@@ -123,9 +152,22 @@ const SlidesTable = ({ lectureId }) => {
                       />
                     </td>
                     <td style={tableStyles.td}>
-                      <span style={tableStyles.timestamp}>
-                        {timestampLabel}
-                      </span>
+                      {hasStartTime ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleJumpToTimestamp(matchedScene.start_time)
+                          }
+                          title={`Jump video to ${formatTimestamp(matchedScene.start_time)}`}
+                          style={tableStyles.timestampButton}
+                        >
+                          {timestampLabel}
+                        </button>
+                      ) : (
+                        <span style={tableStyles.timestamp}>
+                          {timestampLabel}
+                        </span>
+                      )}
                     </td>
                     <td style={tableStyles.td}>
                       <a
@@ -206,6 +248,17 @@ const tableStyles = {
     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
     fontSize: '0.88rem',
     color: '#222',
+  },
+  timestampButton: {
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+    fontSize: '0.88rem',
+    color: '#0056b3',
+    backgroundColor: '#eef5ff',
+    border: '1px solid #b6d4fe',
+    borderRadius: '4px',
+    padding: '4px 8px',
+    cursor: 'pointer',
+    fontWeight: '500',
   },
   link: {
     color: '#0056b3',
