@@ -12,7 +12,7 @@ const DETECTION_PRESETS = {
   },
 };
 
-const VideoUploader = () => {
+const VideoUploader = ({ onUploadSuccess }) => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [videoTitle, setVideoTitle] = useState('');
   const [detectionMode, setDetectionMode] = useState('regular');
@@ -104,9 +104,17 @@ const VideoUploader = () => {
           ) {
             setUploadedLectureId(response.lecture_id);
           }
+
+          if (onUploadSuccess) {
+            onUploadSuccess(response);
+          }
         } catch {
           setStatusMessage('Lecture uploaded successfully!');
           setIsError(false);
+
+          if (onUploadSuccess) {
+            onUploadSuccess(null);
+          }
         }
       } else {
         try {

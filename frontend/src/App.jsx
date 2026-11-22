@@ -1,16 +1,19 @@
-import React from 'react';
+import React, { useState } from 'react';
 import VideoUploader from './VideoUploader';
+import UploadedLectures from './UploadedLectures';
 
 function App() {
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const handleUploadSuccess = () => {
+    setRefreshKey((prev) => prev + 1);
+  };
+
   return (
-    <div style={styles.appContainer}>
-      <header style={styles.header}>
-        <p>Right now, this just uploads things to the backend.</p>
-      </header>
-      <main>
-        <VideoUploader />
-      </main>
-    </div>
+    <main style={styles.appContainer}>
+      <VideoUploader onUploadSuccess={handleUploadSuccess} />
+      <UploadedLectures refreshKey={refreshKey} />
+    </main>
   );
 }
 
