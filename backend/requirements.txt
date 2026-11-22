@@ -1,0 +1,6 @@
+scenedetect[opencv]
+PyMuPDF
+Flask
+Flask-SQLAlchemy
+Flask-Cors
+pytest
