@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import SlidesTable from './SlidesTable';
-import TranscriptPanel from './TranscriptPanel';
 
 const DETECTION_PRESETS = {
   regular: {
@@ -234,8 +233,6 @@ const VideoUploader = () => {
       )}
 
       {uploadedLectureId && <SlidesTable lectureId={uploadedLectureId} />}
-
-      {transcriptLectureId && <TranscriptPanel lectureId={transcriptLectureId} />}
     </div>
   );
 };
