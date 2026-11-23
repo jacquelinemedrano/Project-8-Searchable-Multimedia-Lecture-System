@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import SlidesTable from './SlidesTable';
 
 const API_BASE_URL = 'http://localhost:5000';
@@ -17,6 +17,8 @@ const UploadedLectures = ({ refreshKey = 0, defaultExpanded = false }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [deletingId, setDeletingId] = useState(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const videoRef = useRef(null);
 
   const fetchLectures = useCallback(async () => {
     setLoading(true);
@@ -55,6 +57,11 @@ const UploadedLectures = ({ refreshKey = 0, defaultExpanded = false }) => {
     fetchLectures();
   }, [fetchLectures, refreshKey]);
 
+  const handleSelectLecture = (lectureId) => {
+    setSelectedLectureId(lectureId);
+    setCurrentTime(0);
+  };
+
   const handleDeleteLecture = async (lectureId, event) => {
     event.stopPropagation();
     setDeletingId(lectureId);
@@ -71,7 +78,11 @@ const UploadedLectures = ({ refreshKey = 0, defaultExpanded = false }) => {
       }
 
       setLectures((prev) => prev.filter((lec) => lec.lecture_id !== lectureId));
-      setSelectedLectureId((prev) => (prev === lectureId ? null : prev));
+      setSelectedLectureId((prev) => {
+        if (prev !== lectureId) return prev;
+        setCurrentTime(0);
+        return null;
+      });
     } catch (err) {
       setError(err.message || 'Error deleting lecture.');
     } finally {
@@ -134,7 +145,7 @@ const UploadedLectures = ({ refreshKey = 0, defaultExpanded = false }) => {
                 return (
                   <div
                     key={lecture.lecture_id}
-                    onClick={() => setSelectedLectureId(lecture.lecture_id)}
+                    onClick={() => handleSelectLecture(lecture.lecture_id)}
                     style={{
                       ...styles.lectureCard,
                       ...(isSelected ? styles.selectedCard : {}),
@@ -154,7 +165,7 @@ const UploadedLectures = ({ refreshKey = 0, defaultExpanded = false }) => {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelectedLectureId(lecture.lecture_id);
+                          handleSelectLecture(lecture.lecture_id);
                         }}
                         style={styles.viewButton}
                       >
@@ -185,13 +196,19 @@ const UploadedLectures = ({ refreshKey = 0, defaultExpanded = false }) => {
               </h3>
 
               <video
+                ref={videoRef}
                 key={selectedLecture.lecture_id}
                 src={`${API_BASE_URL}/api/lectures/${selectedLecture.lecture_id}/video`}
                 controls
+                onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
                 style={styles.videoPlayer}
               />
 
-              <SlidesTable lectureId={selectedLecture.lecture_id} />
+              <SlidesTable
+                lectureId={selectedLecture.lecture_id}
+                videoRef={videoRef}
+                currentTime={currentTime}
+              />
             </div>
           )}
         </div>
