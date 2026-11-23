@@ -14,6 +14,12 @@ from .scene_detection import (
     save_video_slides_to_database,
 )
 from .slide_extraction import extract_pdf_slides, save_slides_to_database
+from .transcription import (
+    NoAudioError,
+    transcribe_video,
+    save_transcript_to_database,
+    get_paired_transcript,
+)
 
 # Create a blueprint for our routes
 main = Blueprint("main", __name__)
@@ -112,13 +118,29 @@ def upload_lecture():
         current_app.logger.exception("Video slide extraction failed")
         slide_extraction_status = "failed"
 
+    # Transcribe the lecture audio with FFmpeg + Whisper
+    transcript_segment_count = 0
+    try:
+        segments = transcribe_video(video_path, work_folder=upload_folder)
+        save_transcript_to_database(new_lecture.lecture_id, segments)
+        transcript_segment_count = len(segments)
+        transcription_status = "completed"
+    except NoAudioError:
+        transcription_status = "no_audio"
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Transcription failed")
+        transcription_status = "failed"
+
     return jsonify({
         "message": "Lecture uploaded successfully!",
         "lecture_id": new_lecture.lecture_id,
         "title": new_lecture.title,
         "threshold": threshold,
         "scene_detection_status": scene_detection_status,
-        "slide_extraction_status": slide_extraction_status
+        "slide_extraction_status": slide_extraction_status,
+        "transcription_status": transcription_status,
+        "transcript_segment_count": transcript_segment_count
     }), 201
     
     
@@ -282,6 +304,62 @@ def get_slide_image(lecture_id, slide_number):
     
     
     
+# Get the full timestamped transcript for a lecture
+# Each segment includes the slide that was on screen when it was said
+@main.route("/api/lectures/<int:lecture_id>/transcript", methods=["GET"])
+def get_lecture_transcript(lecture_id):
+
+    lecture = db.session.get(Lecture, lecture_id)
+
+    if lecture is None:
+        return jsonify({
+            "error": "Lecture not found."
+        }), 404
+
+    segments = get_paired_transcript(lecture_id)
+
+    return jsonify({
+        "lecture_id": lecture_id,
+        "segment_count": len(segments),
+        "segments": segments
+    }), 200
+
+
+# Search a lecture's transcript for a word or phrase
+# Example: /api/lectures/1/search?q=binary tree
+@main.route("/api/lectures/<int:lecture_id>/search", methods=["GET"])
+def search_lecture_transcript(lecture_id):
+
+    lecture = db.session.get(Lecture, lecture_id)
+
+    if lecture is None:
+        return jsonify({
+            "error": "Lecture not found."
+        }), 404
+
+    query = request.args.get("q", "").strip()
+
+    if query == "":
+        return jsonify({
+            "error": "Search query is required. Use ?q=your+words"
+        }), 400
+
+    # Case-insensitive search through the transcript
+    query_lower = query.lower()
+    matches = [
+        segment
+        for segment in get_paired_transcript(lecture_id)
+        if query_lower in segment["text"].lower()
+    ]
+
+    return jsonify({
+        "lecture_id": lecture_id,
+        "query": query,
+        "match_count": len(matches),
+        "matches": matches
+    }), 200
+
+
 @main.route("/api/lectures/<int:lecture_id>/video", methods=["GET"])
 def get_lecture_video(lecture_id):
     lecture = db.session.get(Lecture, lecture_id)

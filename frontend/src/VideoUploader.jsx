@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import SlidesTable from './SlidesTable';
+import TranscriptPanel from './TranscriptPanel';
 
 const DETECTION_PRESETS = {
   regular: {
@@ -22,6 +23,7 @@ const VideoUploader = () => {
   const [isError, setIsError] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedLectureId, setUploadedLectureId] = useState(null);
+  const [transcriptLectureId, setTranscriptLectureId] = useState(null);
 
   useEffect(() => {
     return () => {
@@ -41,6 +43,7 @@ const VideoUploader = () => {
 
     setSelectedFile(file);
     setUploadedLectureId(null);
+    setTranscriptLectureId(null);
     setStatusMessage('');
     setIsError(false);
     setUploadProgress(0);
@@ -60,6 +63,7 @@ const VideoUploader = () => {
 
     setIsUploading(true);
     setUploadedLectureId(null);
+    setTranscriptLectureId(null);
     setStatusMessage('');
     setIsError(false);
     setUploadProgress(0);
@@ -92,9 +96,12 @@ const VideoUploader = () => {
           const slideNote = response.slide_extraction_status
             ? ` | Slides: ${response.slide_extraction_status}`
             : '';
+          const transcriptNote = response.transcription_status
+            ? ` | Transcript: ${response.transcription_status}`
+            : '';
 
           setStatusMessage(
-            `Success! Saved as "${response.title}"${sceneNote}${slideNote}`
+            `Success! Saved as "${response.title}"${sceneNote}${slideNote}${transcriptNote}`
           );
           setIsError(false);
 
@@ -103,6 +110,13 @@ const VideoUploader = () => {
             response.slide_extraction_status === 'completed'
           ) {
             setUploadedLectureId(response.lecture_id);
+          }
+
+          if (
+            response.lecture_id &&
+            response.transcription_status === 'completed'
+          ) {
+            setTranscriptLectureId(response.lecture_id);
           }
         } catch {
           setStatusMessage('Lecture uploaded successfully!');
@@ -197,7 +211,7 @@ const VideoUploader = () => {
           cursor: !selectedFile || isUploading ? 'not-allowed' : 'pointer',
         }}
       >
-        {isUploading ? 'Uploading & Extracting...' : 'Upload Video'}
+        {isUploading ? 'Uploading, Extracting & Transcribing...' : 'Upload Video'}
       </button>
 
       {isUploading && (
@@ -220,6 +234,8 @@ const VideoUploader = () => {
       )}
 
       {uploadedLectureId && <SlidesTable lectureId={uploadedLectureId} />}
+
+      {transcriptLectureId && <TranscriptPanel lectureId={transcriptLectureId} />}
     </div>
   );
 };
