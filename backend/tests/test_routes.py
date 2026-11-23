@@ -232,15 +232,28 @@ def test_delete_lecture(client, app):
 # Test uploading a video successfully
 def test_upload_video(client, app, monkeypatch):
 
-    # Mock scene detection so we don't need a real video
+    # Mock scene detection, slide extraction, and transcription
+    # so we don't need a real video
     monkeypatch.setattr(
         "app.routes.detect_video_scenes",
-        lambda video_path: []
+        lambda video_path, threshold=12.0: []
     )
 
     monkeypatch.setattr(
         "app.routes.save_scenes_to_database",
         lambda lecture_id, scenes: None
+    )
+
+    monkeypatch.setattr(
+        "app.routes.extract_slides_from_video",
+        lambda **kwargs: []
+    )
+
+    monkeypatch.setattr(
+        "app.routes.transcribe_video",
+        lambda video_path, work_folder: [
+            {"start_time": 0.0, "end_time": 2.5, "text": "Welcome to the lecture."}
+        ]
     )
 
     # Create a sample video file
@@ -263,7 +276,9 @@ def test_upload_video(client, app, monkeypatch):
 
     assert data["title"] == "Test Upload"
     assert data["scene_detection_status"] == "completed"
-    assert data["slide_extraction_status"] == "not_applicable"
+    assert data["slide_extraction_status"] == "completed"
+    assert data["transcription_status"] == "completed"
+    assert data["transcript_segment_count"] == 1
 
     # Check that the lecture was saved
     with app.app_context():
