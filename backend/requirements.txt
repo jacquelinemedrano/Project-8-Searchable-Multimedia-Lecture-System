@@ -5,3 +5,4 @@ Flask-SQLAlchemy
 Flask-Cors
 pytest
 faster-whisper
+av<19
